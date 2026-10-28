@@ -1,55 +1,98 @@
 # Revenue Sales Analytics
 
-Analyze the September 2026 electronics sales export with the notebook in
-[`sales_analysis.ipynb`](./sales_analysis.ipynb). The workflow uses Python's
-standard library for loading, cleaning, and calculating the report, then uses
-pandas to independently verify the results.
+This project analyzes the September 2026 electronics sales CSV in
+`data/electronics_sales.csv`. The command-line program is
+[`sales_analysis.py`](./sales_analysis.py); it produces a readable sales report
+and checks its main calculations against pandas.
 
-## Run
+## Approach
 
-To generate the text report from the command line:
+The script loads the CSV with Python's standard-library `csv` module and keeps
+each input row as a dictionary. It parses the quantity and unit-price fields,
+skips rows with invalid required numbers, and calculates each valid
+transaction's revenue as:
 
-```bash
-python starter.py
+```text
+revenue = quantity * unit price
 ```
 
-This writes `output/sales_report.txt` and prints the report plus pandas
-verification results. The checks use the same cleaning rules as the custom
-calculations.
+It then calculates total revenue, revenue by product, the three highest-revenue
+products, transactions worth at least KES 50,000, and mean, median, minimum,
+and maximum transaction revenue. The script writes the report to
+`output/sales_report.txt`, prints it, and uses pandas to independently
+recalculate and compare total revenue, product totals, top products, and
+statistics.
 
-To explore the analysis interactively:
+## Requirements and running the script
 
-1. Open `sales_analysis.ipynb` in VS Code or Jupyter from this project folder.
-2. Select a Python kernel with the project dependencies installed (`uv sync`
-   installs the dependencies declared in `pyproject.toml`).
-3. Choose **Restart Kernel and Run All**. Running from a fresh kernel ensures
-   each section has the variables created by the cells before it.
+Use Python 3.14 or newer and install the dependencies from the project folder.
+In PowerShell:
 
-The notebook searches the current working directory and its parent folders
-for `data/electronics_sales.csv`, then prints a report and a pandas verification
-summary. Its calculations do not write or overwrite `output/sales_report.txt`.
+```powershell
+cd C:\path\to\revenue_sales_analytics
+uv sync
+uv run python sales_analysis.py
+```
 
-## Data cleaning
+Replace `C:\path\to\revenue_sales_analytics` with the actual project folder.
+If Python and pandas are already installed in the active environment, you can
+run the script directly from the project folder:
 
-- Commas and a leading `KES` marker are removed from numeric values before
-  conversion, so a formatted price such as `KES 18,999` is accepted.
-- Blank values, `N/A`, and nonnumeric values such as the quantity `two` are
-  rejected. Quantities and unit prices must also be greater than zero.
-- Rows with invalid quantities or prices are excluded and reported with their
-  sale ID and reason. Valid rows include numeric quantity, unit price, and
-  revenue (`quantity * unit price`).
-- The pandas verification uses the same parser and positive-value rules as the
-  standard-library pipeline to prevent mismatched row retention.
+```powershell
+python sales_analysis.py
+```
 
-For the supplied CSV, 46 of 50 rows are used and four are skipped: S-3006 and
-S-3035 have invalid quantities, while S-3030 and S-3039 have invalid prices.
-The formatted price in S-3029 is repaired, and cleaned total revenue is
+The script searches the current directory and its parent directories for
+`data/electronics_sales.csv`. It writes or replaces
+`output/sales_report.txt` in the directory where it finds the project data.
+The pandas verification requires pandas to be installed; `uv sync` installs
+the dependency declared by this project.
+
+## Numeric cleaning rules
+
+The same `parse_number` function is used for quantity and unit-price input:
+
+1. A missing value (`None`) is invalid.
+2. Leading and trailing whitespace is removed and the text is converted to
+   uppercase.
+3. Every `KES` substring and every comma is removed. This accepts values such
+   as `KES 18,999` and treats commas as thousands separators.
+4. An empty string or any of `N/A`, `NONE`, `NULL`, and `-` is invalid.
+5. The remaining text must be accepted by Python's `float` conversion and
+   produce a finite number. Nonnumeric text such as `two`, malformed numbers,
+   `NaN`, and positive or negative infinity are invalid.
+6. After parsing, quantity and unit price must each be greater than zero.
+   Zero or negative values make the row invalid.
+
+If quantity is missing, unparseable, zero, or negative, the row is skipped with
+the reason `invalid quantity`. Otherwise, an invalid, zero, or negative unit
+price causes it to be skipped with the reason `invalid unit price`. If both
+fields are invalid, the quantity reason is reported first. Invalid rows are
+not included in any calculations; the script lists their sale IDs and reasons.
+Valid rows retain their original columns and receive parsed numeric
+`quantity`, `unit_price`, and calculated `revenue` values. Any revenue column
+in the input is not used.
+
+## Assumptions
+
+- The input is a CSV with a header row and quantity plus unit-price columns.
+  The script recognizes `quantity` or `qty`, and `unit_price`,
+  `unit_price_kes`, `unit price`, or `price`.
+- A period is the decimal separator, and commas are thousands separators.
+  The parser does not interpret locale-specific number formats.
+- Word-form numbers such as `two` are rejected rather than translated.
+- Revenue is calculated from quantity and unit price; no tax, discounts,
+  returns, shipping, or other adjustments are applied.
+- Product ranking is by descending revenue; equal totals are ordered
+  alphabetically by product name (case-insensitive). The top-N function
+  defaults to three.
+- The high-value threshold is inclusive: a transaction of exactly KES 50,000
+  is included.
+- Statistics are calculated over valid transactions only. Empty input to a
+  statistics helper raises `ValueError`, and the script stops with an explicit
+  error if the CSV contains no valid rows.
+
+For the supplied data, the script reads 50 rows, uses 46, and skips four:
+S-3006 and S-3035 have invalid quantities; S-3030 and S-3039 have invalid unit
+prices. The formatted price in S-3029 is accepted. Expected total revenue is
 KES 1,310,812.00.
-
-## Calculations
-
-Revenue is grouped by product, store, and payment method. Product rankings sort
-by revenue descending, with names alphabetically as a deterministic
-tie-breaker. High-value transactions meet or exceed KES 50,000. Mean, median,
-minimum, and maximum are calculated from valid transaction revenue; the custom
-statistic functions raise `ValueError` for an empty input.
