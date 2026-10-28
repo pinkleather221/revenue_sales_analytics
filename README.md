@@ -1,70 +1,55 @@
-# September 2026 Sales Analysis
+# Revenue Sales Analytics
 
-This project reads the electronics sales export with Python's standard-library
-`csv` module, cleans the numeric fields, calculates the sales report, and saves
-it to `output/sales_report.txt`. Pandas is used only at the end to independently
-verify the headline results.
+Analyze the September 2026 electronics sales export with the notebook in
+[`sales_analysis.ipynb`](./sales_analysis.ipynb). The workflow uses Python's
+standard library for loading, cleaning, and calculating the report, then uses
+pandas to independently verify the results.
 
 ## Run
 
-From the project directory:
+To generate the text report from the command line:
 
 ```bash
-python sales_analysis.py
+python starter.py
 ```
 
-The script prints the discovered row count and CSV columns, prints the pandas
-verification results, and writes the complete report to
-`output/sales_report.txt`. Pandas must be installed for the verification step;
-the core calculations before that step use no third-party packages.
+This writes `output/sales_report.txt` and prints the report plus pandas
+verification results. The checks use the same cleaning rules as the custom
+calculations.
 
-## Cleaning rules
+To explore the analysis interactively:
 
-- Numeric values are stripped of surrounding whitespace and commas before being
-	converted to `float`.
-- A leading `KES` currency prefix is removed because it is an unambiguous unit
-	marker. This repairs the `KES 18999` price in the source data.
-- Blank values, `N/A`, and nonnumeric text such as `two` are rejected.
-- Quantity and unit price must both be greater than zero. A row is skipped if
-	either required value is missing, invalid, or non-positive.
-- Skipped rows retain their `sale_id` and a reason in the report. Valid rows
-	retain the original text columns and gain numeric quantity, unit price, and
-	revenue (`quantity * unit price`) fields.
+1. Open `sales_analysis.ipynb` in VS Code or Jupyter from this project folder.
+2. Select a Python kernel with the project dependencies installed (`uv sync`
+   installs the dependencies declared in `pyproject.toml`).
+3. Choose **Restart Kernel and Run All**. Running from a fresh kernel ensures
+   each section has the variables created by the cells before it.
 
-These rules skip four invalid records while safely repairing formatted numeric
-prices. They are applied identically by the standard-library calculations and
-the pandas verification.
+The notebook searches the current working directory and its parent folders
+for `data/electronics_sales.csv`, then prints a report and a pandas verification
+summary. Its calculations do not write or overwrite `output/sales_report.txt`.
 
-## Calculations and assumptions
+## Data cleaning
 
-Revenue is grouped with ordinary dictionaries for products, stores, and payment
-methods. Top products are sorted by descending revenue; equal revenues are
-broken alphabetically by product name. High-value transactions use an inclusive
-threshold of KES 50,000. Mean, median, minimum, and maximum are calculated from
-valid per-transaction revenue values, and the custom statistical functions raise
-`ValueError` for an empty list.
+- Commas and a leading `KES` marker are removed from numeric values before
+  conversion, so a formatted price such as `KES 18,999` is accepted.
+- Blank values, `N/A`, and nonnumeric values such as the quantity `two` are
+  rejected. Quantities and unit prices must also be greater than zero.
+- Rows with invalid quantities or prices are excluded and reported with their
+  sale ID and reason. Valid rows include numeric quantity, unit price, and
+  revenue (`quantity * unit price`).
+- The pandas verification uses the same parser and positive-value rules as the
+  standard-library pipeline to prevent mismatched row retention.
 
-## Tie-Breaking Strategy
+For the supplied CSV, 46 of 50 rows are used and four are skipped: S-3006 and
+S-3035 have invalid quantities, while S-3030 and S-3039 have invalid prices.
+The formatted price in S-3029 is repaired, and cleaned total revenue is
+KES 1,310,812.00.
 
-When determining the highest-earning elements using `top_n()`, conflicts can occur if two distinct metrics produce identical financial revenue outcomes. 
+## Calculations
 
-To ensure deterministic results, ties are broken automatically using a multi-level sorting constraint inside the lambda expression:
-1. **Primary Sort:** Groups items by revenue volume in descending order (`-item[1]`).
-2. **Tie-Breaker:** In the event of an identical revenue match, items are evaluated by their string key identifier **alphabetically from A to Z** in lowercase (`item[0].lower()`). 
-
-*Example: If "Anker Power Bank" and "JBL Go Speaker" both generate exactly KES 40,000.00, "Anker Power Bank" will rank higher.*
-
-## Verification Discrepancies & Disclosures
-
-During project auditing via `verify_with_pandas()`, an active discrepancy was flagged concerning the **Median** metric calculation:
-* **Custom Median:** KES 15,999.00
-* **Pandas Median:** KES 10,998.00
-
-### Root Cause Analysis
-The mathematical variation occurs because of differences in row retention strategy between the custom aggregation pipeline and the automated pandas processing workflow:
-
-1. **Custom Processing Architecture (`convert_rows`):** 
-   When calculating metrics manually via dictionary items, row processing isolates and copies initial column structures *before* overwriting values (`clean_row = dict(row)`). If your loop appends rows or performs calculation pipelines without strictly dropping anomalies from the statistical array input, or retains raw elements, index placement skews the midpoint calculation.
-   
-2. **Pandas Processing Architecture:** 
-   Pandas explicitly drops rows 6, 30, 35, and 39 globally using `.dropna()`, reducing the calculation boundary to a tight slice of exactly 47 structured floats. Sorting this clean series places the 24th record at exactly **KES 10,998.00** (from an individual sale of `Oraimo FreePods` or `Infinix Hot 40`), causing the mid-point location to shift downwards relative to unaligned list arrays.
+Revenue is grouped by product, store, and payment method. Product rankings sort
+by revenue descending, with names alphabetically as a deterministic
+tie-breaker. High-value transactions meet or exceed KES 50,000. Mean, median,
+minimum, and maximum are calculated from valid transaction revenue; the custom
+statistic functions raise `ValueError` for an empty input.
